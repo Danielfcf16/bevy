@@ -5,6 +5,7 @@ use bevy_ecs::{
     world::{Command, EntityWorldMut, World},
 };
 use bevy_utils::tracing::debug;
+use bevy_core::Name;
 
 /// Despawns the given entity and all its children recursively
 #[derive(Debug)]
@@ -26,15 +27,21 @@ pub struct DespawnChildrenRecursive {
 
 /// Function for despawning an entity and all its children
 pub fn despawn_with_children_recursive(world: &mut World, entity: Entity, warn: bool) {
-    // first, make the entity's own parent forget about it
     if let Some(parent) = world.get::<Parent>(entity).map(|parent| parent.0) {
         if let Some(mut children) = world.get_mut::<Children>(parent) {
             children.0.retain(|c| *c != entity);
         }
     }
-
-    // then despawn the entity and all of its children
     despawn_with_children_recursive_inner(world, entity, warn);
+}
+
+/// Function for despawning an entity's children
+fn format_entity_name(world: &World, entity: Entity) -> String {
+    if let Some(name) = world.get::<Name>(entity) {
+        format!("'{}' ({:?})", name.as_str(), entity)
+    } else {
+        format!("{:?}", entity)
+    }
 }
 
 // Should only be called by `despawn_with_children_recursive` and `try_despawn_with_children_recursive`!
@@ -45,12 +52,14 @@ fn despawn_with_children_recursive_inner(world: &mut World, entity: Entity, warn
         }
     }
 
-    if warn {
-        if !world.despawn(entity) {
-            debug!("Failed to despawn entity {:?}", entity);
-        }
-    } else if !world.try_despawn(entity) {
-        debug!("Failed to despawn entity {:?}", entity);
+    let success = if warn {
+        world.despawn(entity)
+    } else {
+        world.try_despawn(entity)
+    };
+    
+    if !success {
+        debug!("Failed to despawn entity {}", format_entity_name(world, entity));
     }
 }
 
